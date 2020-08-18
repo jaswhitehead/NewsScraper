@@ -1,0 +1,30 @@
+{
+  "name": "newsscraper",
+  "version": "1.0.0",
+  "description": "Scraping news",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaswhitehead/NewsScraper.git"
+  },
+  "keywords": [
+    "News",
+    "Scraper"
+  ],
+  "author": "Jason Whitehead",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jaswhitehead/NewsScraper/issues"
+  },
+  "homepage": "https://github.com/jaswhitehead/NewsScraper#readme",
+  "dependencies": {
+    "axios": "^0.19.2",
+    "cheerio": "^1.0.0-rc.3",
+    "express": "^4.17.1",
+    "express-handlebars": "^5.1.0",
+    "mongoose": "^5.10.0"
+  }
+}
