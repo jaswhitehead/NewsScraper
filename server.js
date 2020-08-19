@@ -8,7 +8,7 @@
 
 // Dependencies
 var express = require("express");
-var mongojs = require("mongojs");
+// var mongojs = require("mongojs");
 // Require axios and cheerio. This makes the scraping possible
 var axios = require("axios");
 var cheerio = require("cheerio");
@@ -17,15 +17,17 @@ const { text } = require("express");
 // Initialize Express
 var app = express();
 
+var PORT = process.env.PORT || 3000;
+
 // Database configuration
 var databaseUrl = "scraper";
 var collections = ["scrapedData"];
 
 // Hook mongojs configuration to the db variable
-var db = mongojs(databaseUrl, collections);
-db.on("error", function(error) {
-  console.log("Database Error:", error);
-});
+// var db = mongojs(databaseUrl, collections);
+//db.on("error", function(error) {
+//  console.log("Database Error:", error);
+// }); 
 
 // Main route (simple Hello World Message)
 app.get("/", function(req, res) {
@@ -60,29 +62,43 @@ app.get("/all", function(req, res) {
 // push it into a MongoDB collection instead?
 
 app.get("/scrape", function(req, res) {
-  axios.get("https://old.reddit.com/r/webdev").then(
+  axios.get("https://athlonsports.com/tag/college-football").then(
     function(reponse){
       var $ = cheerio.load(response.data);
 
-      $("p.title").each(function(i,element){
+      $("field-content").each(function(i,element){
 
-        var title = $(element).text();
-        var link = $(element).children().attr("href");
+        var result = {};
 
-        if(title && link){
-          db.scrapedData.insert({
-            title: title,
-            link: link
+        result.title = $(this)
+        .children("a")
+        .text();
+        result.link = $(this)
+        .children("a")
+        .attr("href");
+
+        db.Article.create(result)
+        .then(function(dbArticle) {
+          // View the added result in the console
+          console.log(dbArticle);
         })
-        console.log("inserted");
-       }
-      });
-   })
-})
+        .catch(function(err) {
+          // If an error occurred, log it
+          console.log(err);
+        });
+    });
+
+    // Send a message to the client
+    res.send("Scrape Complete");
+  });
+});
+
+
+require("./routes/htmlRoutes")(app);
 
 /* -/-/-/-/-/-/-/-/-/-/-/-/- */
 
-// Listen on port 3000
-app.listen(3000, function() {
-  console.log("App running on port 3000!");
+
+app.listen(PORT, function() {
+  console.log("listening on port: " + PORT);
 });
