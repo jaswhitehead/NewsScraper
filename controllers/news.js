@@ -1,112 +1,156 @@
 var express = require("express");
-var mongoose = require("mongoose");
+var router = express.Router();
+var path = require("path");
 
-// Our scraping tools
-// Axios is a promised-based http library, similar to jQuery's Ajax method
-// It works on the client and on the server
-var axios = require("axios");
+var request = require("request");
 var cheerio = require("cheerio");
 
-// Require all models
-var db = require("./models");
+var Comment = require("../models/Comment.js");
+var Article = require("../models/Article.js");
 
-// A GET route for scraping the BBC website
-app.get("/scrape", (req, res) => {
-    // First, we grab the body of the html with axios
-    axios.get("https://www.bbc.com/news/world").then(function (response) {
-        // Then, we load that into cheerio and save it to $ for a shorthand selector
-        var $ = cheerio.load(response.data);
-        // Now, we grab every buzzard-item within a div class, and do the following:
-        $("buzzard-item").each(function (i, element) {
-            // Save an empty result object
-            var result = {};
+router.get("/", function(req, res) {
+  res.redirect("/articles");
+});
 
-            // Add the text, summary, and href of every link, and save them as properties of the result object
-            result.title = $(this)
-                .children("h3")
-                .text();
-            result.summary = $(this)
-                .children("p")
-                .text();
-            result.link = $(this)
-                .children("a")
-                .attr("href");
+router.get("/scrape", function(req, res) {
+  request("http://www.theverge.com", function(error, response, html) {
+    var $ = cheerio.load(html);
+    var titlesArray = [];
 
-            // Create a new Article using the `result` object built from scraping
-            db.Article.create(result)
-                .then(function (dbArticle) {
-                    // View the added result in the console
-                    console.log(dbArticle);
-                })
-                .catch(function (err) {
-                    // If an error occurred, log it
-                    console.log(err);
-                });
-        });
-        /// Send a message to the client
-        res.send("Scrape Complete");
+    $(".c-entry-box--compact__title").each(function(i, element) {
+      var result = {};
+
+      result.title = $(this)
+        .children("a")
+        .text();
+      result.link = $(this)
+        .children("a")
+        .attr("href");
+
+      if (result.title !== "" && result.link !== "") {
+        if (titlesArray.indexOf(result.title) == -1) {
+          titlesArray.push(result.title);
+
+          Article.count({ title: result.title }, function(err, test) {
+            if (test === 0) {
+              var entry = new Article(result);
+
+              entry.save(function(err, doc) {
+                if (err) {
+                  console.log(err);
+                } else {
+                  console.log(doc);
+                }
+              });
+            }
+          });
+        } else {
+          console.log("Article already exists.");
+        }
+      } else {
+        console.log("Not saved to DB, missing data");
+      }
+    });
+    res.redirect("/");
+  });
+});
+router.get("/articles", function(req, res) {
+  Article.find()
+    .sort({ _id: -1 })
+    .exec(function(err, doc) {
+      if (err) {
+        console.log(err);
+      } else {
+        var artcl = { article: doc };
+        res.render("index", artcl);
+      }
     });
 });
 
-//Render index and populate comments
-app.get("/", function (req, res) {
-    db.Article.find()
-        .sort({ time: -1 })
-        .populate("comments.comment")
-        .then(function (dbArticle) {
-            res.render("index", { result: dbArticle });
-        })
-        .catch(function (err) {
-            res.json(err);
-        });
+router.get("/articles-json", function(req, res) {
+  Article.find({}, function(err, doc) {
+    if (err) {
+      console.log(err);
+    } else {
+      res.json(doc);
+    }
+  });
 });
 
-// Route for getting all Articles from the db
-app.get("/articles", function (req, res) {
-    // Grab every document in the Articles collection
-    db.Article.find({})
-        .then(function (dbArticle) {
-            // If we were able to successfully find Articles, send them back to the client
-            res.json(dbArticle);
-        })
-        .catch(function (err) {
-            // If an error occurred, send it to the client
-            res.json(err);
-        });
+router.get("/clearAll", function(req, res) {
+  Article.remove({}, function(err, doc) {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log("removed all articles");
+    }
+  });
+  res.redirect("/articles-json");
 });
 
-// Route for saving/updating an Article's associated Comment
-app.post("/articles/:id", function (req, res) {
-    // Create a new comment and pass the req.body to the entry
-    db.Comment.create(req.body)
-        .then(function (dbComment) {
-            // If a Comment was created successfully, find one Article with an `_id` equal to `req.params.id`. Update the Article to be associated with the new Comment
-            // { new: true } tells the query that we want it to return the updated User -- it returns the original by default
-            // Since our mongoose query returns a promise, we can chain another `.then` which receives the result of the query
-            return db.Article.findOneAndUpdate({ _id: req.params.id }, { $push: { comments: { comment: dbComment._id } } }, { new: true });
-        })
-        .then(function (dbArticle) {
-            // If we were able to successfully update an Article, send it back to the client
-            res.json(dbArticle);
-        })
-        .catch(function (err) {
-            // If an error occurred, send it to the client
-            res.json(err);
+router.get("/readArticle/:id", function(req, res) {
+  var articleId = req.params.id;
+  var hbsObj = {
+    article: [],
+    body: []
+  };
+
+  Article.findOne({ _id: articleId })
+    .populate("comment")
+    .exec(function(err, doc) {
+      if (err) {
+        console.log("Error: " + err);
+      } else {
+        hbsObj.article = doc;
+        var link = doc.link;
+        request(link, function(error, response, html) {
+          var $ = cheerio.load(html);
+
+          $(".l-col__main").each(function(i, element) {
+            hbsObj.body = $(this)
+              .children(".c-entry-content")
+              .children("p")
+              .text();
+
+            res.render("article", hbsObj);
+            return false;
+          });
         });
+      }
+    });
+});
+router.post("/comment/:id", function(req, res) {
+  var user = req.body.name;
+  var content = req.body.comment;
+  var articleId = req.params.id;
+
+  var commentObj = {
+    name: user,
+    body: content
+  };
+
+  var newComment = new Comment(commentObj);
+
+  newComment.save(function(err, doc) {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log(doc._id);
+      console.log(articleId);
+
+      Article.findOneAndUpdate(
+        { _id: req.params.id },
+        { $push: { comment: doc._id } },
+        { new: true }
+      ).exec(function(err, doc) {
+        if (err) {
+          console.log(err);
+        } else {
+          res.redirect("/readArticle/" + articleId);
+        }
+      });
+    }
+  });
 });
 
-// Route for deleting a comment
-app.get("/comments/:id/:articleid", function (req, res) {
-    console.log(req.body);
-    db.Article.findOneAndUpdate(
-        { _id: req.params.articleid },
-        { $pull: { comments: { comment: req.params.id } } }
-    )
-        .then(function (data) {
-            console.log(data);
-            res.json(data);
-        })
-        .catch(function (err) {
-            res.json(err);
-        });
-});
+module.exports = router;
