@@ -55,7 +55,7 @@ router.get("/scrape", function(req, res) {
   });
 });
 router.get("/articles", function(req, res) {
-  Article.find()
+  Article.find().lean()
     .sort({ _id: -1 })
     .exec(function(err, doc) {
       if (err) {

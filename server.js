@@ -15,6 +15,7 @@ app.use(
 );
 
 app.use(express.static(process.cwd() + "/public"));
+
 //Require set up handlebars
 
 app.engine(
@@ -39,6 +40,7 @@ db.once("open", function() {
 
 var routes = require("./controllers/news.js");
 app.use("/", routes);
+
 //Create localhost port
 var port = process.env.PORT || 5000;
 app.listen(port, function() {
